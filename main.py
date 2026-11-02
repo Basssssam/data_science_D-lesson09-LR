@@ -1,160 +1,145 @@
 import json
-from pathlib import Path
-
+import os
 import pandas as pd
 import streamlit as st
 
-
-# --------------------------------------------------
-# 기본 설정
-# --------------------------------------------------
+# 1. 페이지 설정 (브라우저 탭 제목 및 아이콘)
 st.set_page_config(
     page_title="뇌졸중 예측 실습실",
     page_icon="🧠",
     layout="wide",
 )
 
+# 앱 제목 및 소개
 st.title("🧠 뇌졸중 예측 실습실")
-st.write(
-    "뇌졸중 관련 정보를 담은 데이터를 살펴보는 실습 공간입니다. "
-    "먼저 데이터의 전체 규모와 각 열의 구성을 확인해 보세요."
+st.markdown(
+    "이 앱은 뇌졸중 예측 데이터를 탐색하고 실습하기 위한 공간입니다. 데이터의"
+    " 기본 구조를 파악하고, 각 변수의 의미와 출처를 기록해 보세요."
 )
+st.markdown("---")
 
-# GitHub의 파일 페이지 주소가 아니라 CSV 원본 주소를 사용합니다.
-DATA_URL = (
-    "https://raw.githubusercontent.com/"
-    "Basssssam/data_science_D-data/main/stroke.csv"
-)
-
-# 입력한 설명과 출처를 저장할 폴더 및 JSON 파일
-RECORD_DIR = Path(__file__).parent / "내_기록"
-RECORD_FILE = RECORD_DIR / "뇌졸중_데이터_기록.json"
-
-COLUMNS = [
-    "id",
-    "gender",
-    "age",
-    "hypertension",
-    "heart_disease",
-    "ever_married",
-    "work_type",
-    "Residence_type",
-    "avg_glucose_level",
-    "bmi",
-    "smoking_status",
-    "stroke",
-]
+# 2. 데이터 로드
+DATA_URL = "https://raw.githubusercontent.com/greatsong/modudata/main/data/stroke.csv"
 
 
-# --------------------------------------------------
-# 데이터와 기록 불러오기
-# --------------------------------------------------
 @st.cache_data
 def load_data():
-    data = pd.read_csv(DATA_URL, encoding="utf-8")
-
-    # 교재에 제시된 열 순서와 이름을 확인합니다.
-    missing_columns = [col for col in COLUMNS if col not in data.columns]
-    if missing_columns:
-        raise ValueError(
-            "CSV 파일에서 다음 열을 찾을 수 없습니다: "
-            + ", ".join(missing_columns)
-        )
-
-    return data[COLUMNS]
-
-
-def load_records():
-    default_records = {
-        "meanings": {column: "" for column in COLUMNS},
-        "source": "",
-    }
-
-    if not RECORD_FILE.exists():
-        return default_records
-
-    try:
-        with RECORD_FILE.open("r", encoding="utf-8") as file:
-            saved = json.load(file)
-
-        meanings = default_records["meanings"].copy()
-        meanings.update(saved.get("meanings", {}))
-
-        return {
-            "meanings": meanings,
-            "source": saved.get("source", ""),
-        }
-    except (json.JSONDecodeError, OSError, AttributeError):
-        return default_records
-
-
-def save_records(meanings, source):
-    RECORD_DIR.mkdir(parents=True, exist_ok=True)
-
-    records = {
-        "meanings": meanings,
-        "source": source,
-        }
-
-    with RECORD_FILE.open("w", encoding="utf-8") as file:
-        json.dump(records, file, ensure_ascii=False, indent=4)
+  return pd.read_csv(DATA_URL, encoding="utf-8")
 
 
 try:
-    df = load_data()
-except Exception as error:
-    st.error("데이터를 불러오지 못했습니다. 인터넷 연결과 CSV 주소를 확인해 주세요.")
-    st.exception(error)
-    st.stop()
+  df = load_data()
+except Exception as e:
+  st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
+  st.stop()
 
-saved_records = load_records()
-
-
-# --------------------------------------------------
-# 첫 화면: 데이터 요약 카드
-# --------------------------------------------------
+# 3. 핵심 지표 카드 4개 (전체 사람 수, 열 개수, stroke=1 사람 수, 비율)
 total_people = len(df)
-column_count = len(df.columns)
-stroke_count = int((df["stroke"] == 1).sum())
-stroke_ratio = (stroke_count / total_people * 100) if total_people else 0
+num_columns = len(df.columns)
+stroke_count = (df["stroke"] == 1).sum()
+stroke_ratio = (stroke_count / total_people) * 100
 
-st.subheader("📊 데이터 한눈에 보기")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("전체 사람 수", f"{total_people:,}명")
+col2.metric("열 개수", f"{num_columns}개")
+col3.metric("stroke=1 사람 수", f"{stroke_count:,}명")
+col4.metric("stroke=1 비율", f"{stroke_ratio:.2f}%")
 
-card1, card2, card3, card4 = st.columns(4)
+st.markdown("---")
 
-card1.metric("전체 사람 수", f"{total_people:,}명")
-card2.metric("열 개수", f"{column_count:,}개")
-card3.metric("stroke가 1인 사람 수", f"{stroke_count:,}명")
-card4.metric("stroke가 1인 비율", f"{stroke_ratio:.2f}%")
-
-
-# --------------------------------------------------
-# 열 이름과 값의 종류 정리
-# --------------------------------------------------
-def describe_values(series):
-    values = series.dropna().unique().tolist()
-    count = len(values)
-
-    # 값의 종류가 적은 열은 실제 값을 표시합니다.
-    if count <= 8:
-        display_values = []
-        for value in values:
-            if isinstance(value, float) and value.is_integer():
-                value = int(value)
-            display_values.append(str(value))
-        return ", ".join(display_values) if display_values else "값 없음"
-
-    # 값이 많은 열은 자료형과 고유값 개수로 요약합니다.
-    if pd.api.types.is_numeric_dtype(series):
-        return f"숫자형 · 고유값 {count:,}개"
-
-    preview = ", ".join(str(value) for value in values[:5])
-    return f"범주형 · {preview} 등 (고유값 {count:,}개)"
-
-
-st.subheader("🗂️ 열 이름과 데이터 구성")
-st.caption(
-    "‘우리말 뜻’ 칸을 직접 입력하거나 수정하면 내_기록 폴더의 JSON 파일에 저장됩니다."
+# 4. 열 정보 및 우리말 뜻 입력 표 (st.data_editor 활용)
+st.subheader("📋 데이터셋 열 정보 및 우리말 뜻")
+st.markdown(
+    "교재를 참고하여 **우리말 뜻** 칸을 직접 입력하고 아래의 **[저장하기]**"
+    " 버튼을 눌러주세요. 입력한 내용은 `내_기록` 폴더에 저장되어"
+    " 새로고침해도 유지됩니다."
 )
 
-table_rows = []
+# 내_기록 폴더 생성
+os.makedirs("내_기록", exist_ok=True)
+meanings_file = os.path.join("내_기록", "column_meanings.json")
+
+# 기본 열 정보 데이터프레임 생성
+col_info_list = []
+for col in df.columns:
+  dtype = str(df[col].dtype)
+  if "int" in dtype or "float" in dtype:
+    val_type = "숫자형 (Numeric)"
+  else:
+    val_type = "범주형/문자형 (Categorical)"
+
+  missing_count = int(df[col].isnull().sum())
+  col_info_list.append({
+      "열 이름 (Column)": col,
+      "우리말 뜻": "",
+      "값의 종류": val_type,
+      "빈 값 개수": missing_count,
+  })
+
+default_info_df = pd.DataFrame(col_info_list)
+
+# 기존에 저장된 우리말 뜻이 있다면 불러와서 병합
+if os.path.exists(meanings_file):
+  try:
+    with open(meanings_file, "r", encoding="utf-8") as f:
+      saved_data = json.load(f)
+      saved_df = pd.DataFrame(saved_data)
+      if (
+          "열 이름 (Column)" in saved_df.columns
+          and "우리말 뜻" in saved_df.columns
+      ):
+        meaning_map = dict(
+            zip(saved_df["열 이름 (Column)"], saved_df["우리말 뜻"])
+        )
+        default_info_df["우리말 뜻"] = default_info_df[
+            "열 이름 (Column)"
+        ].map(lambda x: meaning_map.get(x, ""))
+  except Exception:
+    pass
+
+# 편집 가능한 표 생성
+edited_df = st.data_editor(
+    default_info_df,
+    num_rows="fixed",
+    use_container_width=True,
+    key="column_meanings_editor",
+)
+
+if st.button("우리말 뜻 저장하기"):
+  edited_df.to_json(
+      meanings_file, orient="records", force_ascii=False, indent=4
+  )
+  st.success("우리말 뜻이 `내_기록/column_meanings.json`에 저장되었습니다!")
+
+st.markdown("---")
+
+# 5. 데이터 처음 다섯 줄 미리보기
+st.subheader("🔍 데이터 미리보기 (처음 5줄)")
+st.dataframe(df.head(), use_container_width=True)
+
+st.markdown("---")
+
+# 6. 데이터 출처 작성 영역
+st.subheader("📖 데이터 출처")
+source_file = os.path.join("내_기록", "data_source.json")
+
+current_source = ""
+if os.path.exists(source_file):
+  try:
+    with open(source_file, "r", encoding="utf-8") as f:
+      source_data = json.load(f)
+      current_source = source_data.get("source_text", "")
+  except Exception:
+    pass
+
+source_text = st.text_area(
+    "교재를 참고하여 데이터 출처를 작성해 주세요:",
+    value=current_source,
+    height=120,
+    placeholder="여기에 데이터 출처 관련 설명을 적어보세요...",
+)
+
+if st.button("데이터 출처 저장하기"):
+  with open(source_file, "w", encoding="utf-8") as f:
+    json.dump({"source_text": source_text}, f, ensure_ascii=False, indent=4)
+  st.success("데이터 출처가 `내_기록/data_source.json`에 저장되었습니다!")
