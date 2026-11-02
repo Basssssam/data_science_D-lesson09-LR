@@ -94,3 +94,67 @@ def save_records(meanings, source):
     records = {
         "meanings": meanings,
         "source": source,
+        }
+
+    with RECORD_FILE.open("w", encoding="utf-8") as file:
+        json.dump(records, file, ensure_ascii=False, indent=4)
+
+
+try:
+    df = load_data()
+except Exception as error:
+    st.error("데이터를 불러오지 못했습니다. 인터넷 연결과 CSV 주소를 확인해 주세요.")
+    st.exception(error)
+    st.stop()
+
+saved_records = load_records()
+
+
+# --------------------------------------------------
+# 첫 화면: 데이터 요약 카드
+# --------------------------------------------------
+total_people = len(df)
+column_count = len(df.columns)
+stroke_count = int((df["stroke"] == 1).sum())
+stroke_ratio = (stroke_count / total_people * 100) if total_people else 0
+
+st.subheader("📊 데이터 한눈에 보기")
+
+card1, card2, card3, card4 = st.columns(4)
+
+card1.metric("전체 사람 수", f"{total_people:,}명")
+card2.metric("열 개수", f"{column_count:,}개")
+card3.metric("stroke가 1인 사람 수", f"{stroke_count:,}명")
+card4.metric("stroke가 1인 비율", f"{stroke_ratio:.2f}%")
+
+
+# --------------------------------------------------
+# 열 이름과 값의 종류 정리
+# --------------------------------------------------
+def describe_values(series):
+    values = series.dropna().unique().tolist()
+    count = len(values)
+
+    # 값의 종류가 적은 열은 실제 값을 표시합니다.
+    if count <= 8:
+        display_values = []
+        for value in values:
+            if isinstance(value, float) and value.is_integer():
+                value = int(value)
+            display_values.append(str(value))
+        return ", ".join(display_values) if display_values else "값 없음"
+
+    # 값이 많은 열은 자료형과 고유값 개수로 요약합니다.
+    if pd.api.types.is_numeric_dtype(series):
+        return f"숫자형 · 고유값 {count:,}개"
+
+    preview = ", ".join(str(value) for value in values[:5])
+    return f"범주형 · {preview} 등 (고유값 {count:,}개)"
+
+
+st.subheader("🗂️ 열 이름과 데이터 구성")
+st.caption(
+    "‘우리말 뜻’ 칸을 직접 입력하거나 수정하면 내_기록 폴더의 JSON 파일에 저장됩니다."
+)
+
+table_rows = []
