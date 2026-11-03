@@ -124,7 +124,6 @@ st.subheader("📊 2. 모델별 혼동행렬 (실제 vs 예측)")
 
 
 def get_cm_dict(y_true, y_pred):
-    # sklearn confusion_matrix 순서: [[TN, FP], [FN, TP]]
     cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
     tn, fp, fn, tp = cm.ravel()
     return tn, fp, fn, tp
@@ -144,17 +143,20 @@ for name, pred, col in models_eval:
     tn, fp, fn, tp = get_cm_dict(y_test, pred)
     cm_results[name] = {"TN": tn, "FP": fp, "FN": fn, "TP": tp}
 
-    # 표 구성 (행: 실제, 열: 예측)
+    # 표 구성 (모든 값을 문자열로 통일하여 PyArrow 타입 에러 방지)
     cm_df = pd.DataFrame(
         {
             "예측: 정상(0)": [f"TN: {tn}", f"FN: {fn}"],
             "예측: 뇌졸중(1)": [f"FP: {fp}", f"TP: {tp}"],
-            "행 합계": [tn + fp, fn + tp],
+            "행 합계": [str(tn + fp), str(fn + tp)],
         },
         index=["실제: 정상(0)", "실제: 뇌졸중(1)"],
     )
-    # 열 합계 추가
-    cm_df.loc["열 합계"] = [tn + fn, fp + tp, total_test_count]
+    cm_df.loc["열 합계"] = [
+        str(tn + fn),
+        str(fp + tp),
+        str(total_test_count),
+    ]
 
     with col:
         st.markdown(f"##### {name}")
@@ -176,7 +178,6 @@ def calc_metrics(tn, fp, fn, tp):
     # 정밀도 분모: 뇌졸중이라 예측한 사람 수 (tp + fp)
     if (tp + fp) > 0:
         precision = tp / (tp + fp)
-        # F1 스코어 계산
         if (precision + recall) > 0:
             f1 = 2 * precision * recall / (precision + recall)
         else:
@@ -237,7 +238,6 @@ selected_pred = (
     else (dt_pred if "의사결정" in selected_model_name else dummy_pred)
 )
 
-# 테스트 데이터프레임에 예측값 및 결과 태그 부여
 eval_df = df_test.copy()
 eval_df["pred"] = selected_pred
 eval_df["stroke_actual"] = eval_df["stroke"]
@@ -273,9 +273,10 @@ def format_subset_df(sub_df):
 
 
 with col1:
+    # 에러 수정: 변수와 단어 사이 띄어쓰기({fn_total_count}명)
     st.markdown(
         f"##### 🔴 실제 뇌졸중인데 아니라고 예측한 사람 (놓친 환자 - FN) [총"
-        f" {fn_total_count명}]"
+        f" {fn_total_count}명]"
     )
     limited_fn = fn_df.head(20)
     st.dataframe(format_subset_df(limited_fn), use_container_width=True)
@@ -283,9 +284,10 @@ with col1:
         st.caption("※ 항목이 20줄을 초과하여 앞 20줄만 표시합니다.")
 
 with col2:
+    # 에러 수정: 변수와 단어 사이 띄어쓰기({fp_total_count}명)
     st.markdown(
         f"##### 🔵 아니인데 뇌졸중이라고 예측한 사람 (헛짚은 사람 - FP) [총"
-        f" {fp_total_count명}]"
+        f" {fp_total_count}명]"
     )
     limited_fp = fp_df.head(20)
     st.dataframe(format_subset_df(limited_fp), use_container_width=True)
@@ -294,7 +296,6 @@ with col2:
 
 st.markdown("---")
 
-# 혼동행렬의 FN, FP 수와 일치함을 안내하는 문구
 current_fn_val = cm_results[selected_model_name]["FN"]
 current_fp_val = cm_results[selected_model_name]["FP"]
 st.info(
