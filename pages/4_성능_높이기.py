@@ -254,7 +254,7 @@ for model_name, pred_before, pred_after in models_comparison:
     st.markdown("---")
 
 # 9. 시각화 (2차원 또는 3차원 산점도 및 결정 경계 비교)
-st.subheader("📈 3. 가중치 조정 전후 결정 경계 비교")
+st.subheader("📈 3. 가중치 조정 전후 결정 경계 및 추세선 비교")
 
 model_choice = st.selectbox(
     "시각화할 모델을 선택하세요:",
@@ -268,25 +268,25 @@ current_model_after = lr_after if "로지스틱" in model_choice else dt_after
 korean_selected = [feature_map[f] for f in selected_features]
 
 if len(selected_features) == 2:
-    # 속성 2개일 때: 2차원 산점도 및 경계선 비교
+    # 속성 2개일 때: 2차원 산점도, 결정 경계선 및 데이터 추세선(OLS) 표시
     col_x_kor, col_y_kor = korean_selected[0], korean_selected[1]
     x_feat, y_feat = selected_features[0], selected_features[1]
 
     df_test["stroke_str"] = df_test["stroke"].map({0: "정상(0)", 1: "뇌졸중(1)"})
-    fig = go.Figure()
 
-    for label, color in [("정상(0)", "#3366CC"), ("뇌졸중(1)", "#DC3912")]:
-        subset = df_test[df_test["stroke_str"] == label]
-        fig.add_trace(
-            go.Scatter(
-                x=subset[x_feat],
-                y=subset[y_feat],
-                mode="markers",
-                name=label,
-                marker=dict(color=color, size=8, opacity=0.8),
-            )
-        )
+    # Plotly Express를 이용해 산점도와 추세선(trendline="ols") 동시 생성
+    fig = px.scatter(
+        df_test,
+        x=x_feat,
+        y=y_feat,
+        color="stroke_str",
+        color_discrete_map={"정상(0)": "#3366CC", "뇌졸중(1)": "#DC3912"},
+        trendline="ols",
+        labels={x_feat: col_x_kor, y_feat: col_y_kor, "stroke_str": "실제 뇌졸중 여부"},
+        title=f"{col_x_kor} vs {col_y_kor} : 산점도, 추세선 및 결정 경계 비교",
+    )
 
+    # 결정 경계선(Contour) 겹치기
     xx, yy = np.meshgrid(
         np.linspace(df_test[x_feat].min(), df_test[x_feat].max(), 100),
         np.linspace(df_test[y_feat].min(), df_test[y_feat].max(), 100),
@@ -301,7 +301,7 @@ if len(selected_features) == 2:
             y=np.linspace(df_test[y_feat].min(), df_test[y_feat].max(), 100),
             showscale=False,
             contours=dict(start=0.5, end=0.5, size=0, coloring="none"),
-            line=dict(color="blue", width=3, dash="dash"),
+            line=dict(color="blue", width=2, dash="dash"),
             name="조정 전 경계선",
         )
     )
@@ -314,13 +314,12 @@ if len(selected_features) == 2:
             y=np.linspace(df_test[y_feat].min(), df_test[y_feat].max(), 100),
             showscale=False,
             contours=dict(start=0.5, end=0.5, size=0, coloring="none"),
-            line=dict(color="red", width=3, dash="solid"),
+            line=dict(color="red", width=2, dash="solid"),
             name="조정 후 경계선(balanced)",
         )
     )
 
     fig.update_layout(
-        title=f"{col_x_kor} vs {col_y_kor} : 가중치 조정 전후 결정 경계 비교",
         xaxis_title=col_x_kor,
         yaxis_title=col_y_kor,
         template="plotly_white",
@@ -329,7 +328,7 @@ if len(selected_features) == 2:
     st.plotly_chart(fig, use_container_width=True)
 
 else:
-    # 속성 3개 이상일 때: 처음 3개 속성을 축으로 3차원 산점도 및 전후 0.5 경계면(isosurface) 표시
+    # 속성 3개 이상일 때: 3차원 산점도 및 결정 경계면 표시
     st.markdown(
         "✨ 선택하신 속성이 3개 이상이므로, **처음 3개 속성**을 각각 X, Y, Z축으로"
         " 하여 3차원 산점도와 가중치 조정 전후의 **0.5 결정 경계면**을 겹쳐서"
@@ -352,7 +351,6 @@ else:
     df_test["stroke_str"] = df_test["stroke"].map({0: "정상(0)", 1: "뇌졸중(1)"})
     fig = go.Figure()
 
-    # 테스트 데이터 3D 점 찍기
     for label, color in [("정상(0)", "#3366CC"), ("뇌졸중(1)", "#DC3912")]:
         subset = df_test[df_test["stroke_str"] == label]
         fig.add_trace(
@@ -366,7 +364,6 @@ else:
             )
         )
 
-    # 3차원 격자 생성하여 전후 모델의 경계면(Isosurface) 추가
     nx, ny, nz = 30, 30, 30
     x_vals = np.linspace(df_test[x_feat].min(), df_test[x_feat].max(), nx)
     y_vals = np.linspace(df_test[y_feat].min(), df_test[y_feat].max(), ny)
@@ -379,7 +376,6 @@ else:
     for f in other_feats:
         grid_3d[f] = median_vals[f]
 
-    # 가중치 조정 전 예측 값 (확률 또는 클래스)
     if hasattr(current_model_before, "predict_proba"):
         val_b = current_model_before.predict_proba(grid_3d)[:, 1].reshape(
             GX.shape
@@ -387,7 +383,6 @@ else:
     else:
         val_b = current_model_before.predict(grid_3d).astype(float).reshape(GX.shape)
 
-    # 가중치 조정 후 예측 값
     if hasattr(current_model_after, "predict_proba"):
         val_a = current_model_after.predict_proba(grid_3d)[:, 1].reshape(
             GX.shape
@@ -395,7 +390,6 @@ else:
     else:
         val_a = current_model_after.predict(grid_3d).astype(float).reshape(GX.shape)
 
-    # 가중치 조정 전 0.5 경계면 (파란색 투명 평면)
     fig.add_trace(
         go.Isosurface(
             x=GX.flatten(),
@@ -411,7 +405,6 @@ else:
         )
     )
 
-    # 가중치 조정 후 0.5 경계면 (빨간색 투명 평면)
     fig.add_trace(
         go.Isosurface(
             x=GX.flatten(),
