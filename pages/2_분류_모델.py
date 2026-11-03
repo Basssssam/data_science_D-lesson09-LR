@@ -182,7 +182,6 @@ x_min, x_max = (
     df_test[x_feat].min() * 0.9 if df_test[x_feat].min() > 0 else df_test[x_feat].min() * 1.1,
     df_test[x_feat].max() * 1.1,
 )
-# 수정된 부분: y_min과 y_max 모두 올바르게 언패킹되도록 최솟값과 최댓값 지정
 y_min, y_max = (
     df_test[y_feat].min() * 0.9 if df_test[y_feat].min() > 0 else df_test[y_feat].min() * 1.1,
     df_test[y_feat].max() * 1.1,
@@ -281,6 +280,7 @@ st.subheader("🌳 4. 의사결정트리 질문 구조 시각화")
 
 korean_feature_names = [feature_map[f] for f in selected_features]
 
+# 에러 원인이었던 불필요하거나 호환되지 않는 인자(precision 등)를 제거하고 표준 인자만 사용
 dot_data = export_graphviz(
     dt,
     out_file=None,
@@ -289,7 +289,6 @@ dot_data = export_graphviz(
     filled=True,
     rounded=True,
     special_chars=True,
-    precision=2,
 )
 
 st.graphviz_chart(dot_data)
@@ -302,13 +301,4 @@ leaf_predictions = np.argmax(leaf_values, axis=1)
 num_class_0_leaves = np.sum(leaf_predictions == 0)
 
 used_features_indices = dt.tree_.feature
-used_features_indices = used_features_indices[used_features_indices != -2]
-used_feature_names = set(
-    [korean_feature_names[i] for i in used_features_indices]
-)
-
-st.markdown(f"""
-- **답을 내는 마디(리프 노드) 수**: 총 {num_leaves}개
-- **그중 '정상(아님)'이라고 답하는 마디 수**: {num_class_0_leaves}개
-- **고른 속성 가운데 이 나무가 실제로 물어본 속성**: {", ".join(used_feature_names) if used_feature_names else "없음"}
-""")
+used_features_
