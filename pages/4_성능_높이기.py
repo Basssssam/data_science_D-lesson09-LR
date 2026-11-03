@@ -268,23 +268,44 @@ current_model_after = lr_after if "로지스틱" in model_choice else dt_after
 korean_selected = [feature_map[f] for f in selected_features]
 
 if len(selected_features) == 2:
-    # 속성 2개일 때: 2차원 산점도, 결정 경계선 및 데이터 추세선(OLS) 표시
+    # 속성 2개일 때: 2차원 산점도, 결정 경계선 및 추세선 표시
     col_x_kor, col_y_kor = korean_selected[0], korean_selected[1]
     x_feat, y_feat = selected_features[0], selected_features[1]
 
     df_test["stroke_str"] = df_test["stroke"].map({0: "정상(0)", 1: "뇌졸중(1)"})
 
-    # Plotly Express를 이용해 산점도와 추세선(trendline="ols") 동시 생성
-    fig = px.scatter(
-        df_test,
-        x=x_feat,
-        y=y_feat,
-        color="stroke_str",
-        color_discrete_map={"정상(0)": "#3366CC", "뇌졸중(1)": "#DC3912"},
-        trendline="ols",
-        labels={x_feat: col_x_kor, y_feat: col_y_kor, "stroke_str": "실제 뇌졸중 여부"},
-        title=f"{col_x_kor} vs {col_y_kor} : 산점도, 추세선 및 결정 경계 비교",
-    )
+    fig = go.Figure()
+
+    # 산점도 점 찍기
+    for label, color in [("정상(0)", "#3366CC"), ("뇌졸중(1)", "#DC3912")]:
+        subset = df_test[df_test["stroke_str"] == label]
+        fig.add_trace(
+            go.Scatter(
+                x=subset[x_feat],
+                y=subset[y_feat],
+                mode="markers",
+                name=label,
+                marker=dict(color=color, size=8, opacity=0.8),
+            )
+        )
+
+    # numpy를 이용한 추세선(1차 회귀선) 직접 계산 및 추가
+    valid_data = df_test[[x_feat, y_feat]].dropna()
+    if len(valid_data) > 1:
+        m, b = np.polyfit(valid_data[x_feat], valid_data[y_feat], 1)
+        x_line = np.array(
+            [valid_data[x_feat].min(), valid_data[x_feat].max()]
+        )
+        y_line = m * x_line + b
+        fig.add_trace(
+            go.Scatter(
+                x=x_line,
+                y=y_line,
+                mode="lines",
+                name="전체 추세선",
+                line=dict(color="black", width=2, dash="dot"),
+            )
+        )
 
     # 결정 경계선(Contour) 겹치기
     xx, yy = np.meshgrid(
@@ -320,6 +341,7 @@ if len(selected_features) == 2:
     )
 
     fig.update_layout(
+        title=f"{col_x_kor} vs {col_y_kor} : 산점도, 추세선 및 결정 경계 비교",
         xaxis_title=col_x_kor,
         yaxis_title=col_y_kor,
         template="plotly_white",
