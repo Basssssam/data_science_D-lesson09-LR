@@ -182,8 +182,10 @@ x_min, x_max = (
     df_test[x_feat].min() * 0.9 if df_test[x_feat].min() > 0 else df_test[x_feat].min() * 1.1,
     df_test[x_feat].max() * 1.1,
 )
+# 수정된 부분: y_min과 y_max 모두 올바르게 언패킹되도록 최솟값과 최댓값 지정
 y_min, y_max = (
     df_test[y_feat].min() * 0.9 if df_test[y_feat].min() > 0 else df_test[y_feat].min() * 1.1,
+    df_test[y_feat].max() * 1.1,
 )
 
 xx, yy = np.meshgrid(
